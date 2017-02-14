@@ -37,19 +37,18 @@
 <script>
 import BuyeeItem from './../components/Buyee-Item';
 
-const moment = require('moment');
+const differenceInMinutes = require('date-fns/difference_in_minutes');
+const endOfHour = require('date-fns/end_of_hour');
+
 require('es6-promise').polyfill();
 require('isomorphic-fetch');
 
 function getTimeToRefresh() {
-  const currentMoment = moment();
-  const currentHour = currentMoment.hour();
-  let nextHour = currentHour + 1;
-  if (nextHour > 23) {
-    nextHour = 0;
-  }
-  const nextRefresh = moment(`${nextHour}:00`, 'H:m');
-  const timeToRefresh = currentMoment.to(nextRefresh);
+  const minsToRefresh = differenceInMinutes(
+    endOfHour(new Date()),
+    new Date(),
+  );
+  const timeToRefresh = `~${minsToRefresh}mins`;
   return timeToRefresh;
 }
 
