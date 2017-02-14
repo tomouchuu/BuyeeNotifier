@@ -78,9 +78,10 @@ function getBuyeeItems(searchterm) {
 
 // CRON JOB for Buyee
 const CronJob = require('cron').CronJob;
-const twitterBot = require('./twitter');
+// const twitterBot = require('./twitter');
 
-new CronJob('00 * * * * *', () => { //eslint-disable-line
+// new CronJob('00 00 * * * *', () => { // eslint-disable-line -- Run every hour
+new CronJob('00 * * * * *', () => { // eslint-disable-line -- Run every minute
   console.log('running cron');
   db.find({}, (err, watchlists) => {
     watchlists.forEach((watchlist) => {
@@ -92,7 +93,7 @@ new CronJob('00 * * * * *', () => { //eslint-disable-line
         };
         db.update({ _id: watchlist._id }, newWatchlist, {}, (error) => { //eslint-disable-line
           if (error) throw error;
-          twitterBot(watchlist._id, watchlist.twitter, watchlist.searchterm, items); // eslint-disable-line
+          // twitterBot(watchlist._id, watchlist.twitter, watchlist.searchterm, items); // eslint-disable-line
         });
       });
     });
