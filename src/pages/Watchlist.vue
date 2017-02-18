@@ -17,7 +17,7 @@
         <nav class="flex justify-between">
           <div class="flex-grow pa3 flex items-center">
             <p class="black dib mr3"><b>Searching:</b> <a target="_blank" v-bind:href="'http://buyee.jp/item/search/query/'+data.searchterm">{{ data.searchterm }}</a></p>
-            <p class="black dib mr3"><b>Notifying:</b> <a target="_blank" v-bind:href="'https://twitter.com/'+data.twitter">@{{ data.twitter }}</a></p>
+            <p class="black dib mr3" v-if="data.twitter"><b>Notifying:</b> <a target="_blank" v-bind:href="'https://twitter.com/'+data.twitter">@{{ data.twitter }}</a></p>
             <p class="black dib mr3"><b>Next Update:</b> {{ timeTo }}</p>
           </div>
           <div class="pa3 flex items-center">
@@ -28,6 +28,7 @@
       <main>
         <div v-if="data.items" class="watchlist-items">
           <BuyeeItem v-for="item in data.items" v-bind:item="item" :key="item._id"/>
+          <ExtraItems v-if="data.moreThan20" v-bind:data="data" />
         </div>
       </main>
     </div>
@@ -36,6 +37,7 @@
 
 <script>
 import BuyeeItem from './../components/Buyee-Item';
+import ExtraItems from './../components/Extra-Items';
 
 const differenceInMinutes = require('date-fns/difference_in_minutes');
 const endOfHour = require('date-fns/end_of_hour');
@@ -56,6 +58,7 @@ export default {
   name: 'watchlist',
   components: {
     BuyeeItem,
+    ExtraItems,
   },
   data() {
     return {
@@ -63,6 +66,7 @@ export default {
       data: null,
       timeTo: '',
       items: null,
+      moreThan20: false,
     };
   },
   created() {

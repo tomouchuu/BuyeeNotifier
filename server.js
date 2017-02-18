@@ -15,10 +15,13 @@ require('es6-promise').polyfill();
 require('isomorphic-fetch');
 const htmlToJson = require('html-to-json');
 const v = require('voca');
+const encoding = require('encoding-japanese');
 
 // Get items from buyee
 function getBuyeeItems(searchterm) {
   return new Promise((resolve) => {
+    const buyeeItems = [];
+
     function formatPrice(price) {
       const trimmedPrice = v.trim(price);
       return v.substring(trimmedPrice, 0, v.indexOf(trimmedPrice, 'n') + 1);
@@ -28,49 +31,60 @@ function getBuyeeItems(searchterm) {
       return v.replace(v.substring(trimmedPrice, v.indexOf(trimmedPrice, '(')), /\(|\)/g, '');
     }
 
-    const BUYEE_URL = `https://buyee.jp/item/search/query/${searchterm}?translationType=1`;
-    const buyeeItems = [];
+    const encodedSearchterm = encoding.urlEncode(searchterm);
+    const BUYEE_URL = `https://buyee.jp/item/search/query/${encodedSearchterm}?translationType=1`;
 
     fetch(BUYEE_URL)
       .then(response => response.text())
       .then((body) => {
-        htmlToJson.parse(body, ['.product_whole', {
-          link: $doc => $doc.find('a').attr('href'),
-          image: $doc => $doc.find('img.product_image').attr('src'),
-          bids: $doc => $doc.find('.buyeeicon-bids').text(),
-          title: $doc => $doc.find('.product_title').text(),
-          price: $doc => $doc.find('.product_price').text(),
-          buyout: $doc => $doc.find('.product_bidorbuy').text(),
-          remaining: $doc => $doc.find('.product_remaining').text(),
-        }]).done((items) => {
-          items.forEach((item) => {
-            const trimmedTitle = v.trim(item.title);
-            const price = formatPrice(item.price);
-            const localPrice = formatLocalPrice(item.price);
+        // Check if there is more than one page
+        htmlToJson.parse(body, ['.page_navi', {
+          link: $doc => $doc.find('a'),
+        }]).done((pages) => {
+          // If there is then add a special footer link to go to buyee
+          let moreThan20 = false;
+          if (pages[0].link.length > 0) {
+            moreThan20 = true;
+          }
 
-            let buyout = null;
-            let localBuyout = null;
-            if (!item.buyout.includes('ー')) {
-              buyout = formatPrice(item.buyout);
-              localBuyout = formatLocalPrice(item.buyout);
-            }
+          htmlToJson.parse(body, ['.product_whole', {
+            link: $doc => $doc.find('a').attr('href'),
+            image: $doc => $doc.find('img.product_image').attr('src'),
+            bids: $doc => $doc.find('.buyeeicon-bids').text(),
+            title: $doc => $doc.find('.product_title').text(),
+            price: $doc => $doc.find('.product_price').text(),
+            buyout: $doc => $doc.find('.product_bidorbuy').text(),
+            remaining: $doc => $doc.find('.product_remaining').text(),
+          }]).done((items) => {
+            items.forEach((item) => {
+              const trimmedTitle = v.trim(item.title);
+              const price = formatPrice(item.price);
+              const localPrice = formatLocalPrice(item.price);
 
-            const buyeeItem = {
-              link: `http://buyee.jp${item.link}`,
-              image: item.image,
-              bids: item.bids,
-              title: trimmedTitle,
-              price,
-              localPrice,
-              buyout,
-              localBuyout,
-              remaining: item.remaining,
-            };
+              let buyout = null;
+              let localBuyout = null;
+              if (!item.buyout.includes('ー')) {
+                buyout = formatPrice(item.buyout);
+                localBuyout = formatLocalPrice(item.buyout);
+              }
 
-            buyeeItems.push(buyeeItem);
+              const buyeeItem = {
+                link: `http://buyee.jp${item.link}`,
+                image: item.image,
+                bids: item.bids,
+                title: trimmedTitle,
+                price,
+                localPrice,
+                buyout,
+                localBuyout,
+                remaining: item.remaining,
+              };
+
+              buyeeItems.push(buyeeItem);
+            });
+
+            resolve([buyeeItems, moreThan20]);
           });
-
-          resolve(buyeeItems);
         });
       });
   });
@@ -81,15 +95,16 @@ const CronJob = require('cron').CronJob;
 // const twitterBot = require('./twitter');
 
 // new CronJob('00 00 * * * *', () => { // eslint-disable-line -- Run every hour
-new CronJob('00 * * * * *', () => { // eslint-disable-line -- Run every minute
+new CronJob('00 00 * * * *', () => { // eslint-disable-line -- Run every minute
   console.log('running cron');
   db.find({}, (err, watchlists) => {
     watchlists.forEach((watchlist) => {
-      getBuyeeItems(watchlist.searchterm).then((items) => {
+      getBuyeeItems(watchlist.searchterm).then((data) => {
         const newWatchlist = {
           searchterm: watchlist.searchterm,
           twitter: watchlist.twitter,
-          items,
+          items: data[0],
+          moreThan20: data[1],
         };
         db.update({ _id: watchlist._id }, newWatchlist, {}, (error) => { //eslint-disable-line
           if (error) throw error;
@@ -117,11 +132,12 @@ app.post('/api/watchlist', (req, res) => {
   }
 
   const searchterm = req.body.searchterm;
-  getBuyeeItems(searchterm).then((items) => {
+  getBuyeeItems(searchterm).then((data) => {
     db.insert({
       searchterm,
       twitter: twitteruser,
-      items,
+      items: data[0],
+      moreThan20: data[1],
     }, (err, watchlist) => {
       if (err) throw err;
       res.redirect(`/${watchlist._id}`); //eslint-disable-line
